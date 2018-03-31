@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+      <meta charset="UTF-8">
+      <title>SERVER</title>
+      <!-- Nhúng file Javasript tại đường dẫn src để có thể xây dựng 1 graph -->
+      <link rel="stylesheet" href="style.css">
+      <script type="text/javascript" src="https://canvasjs.com/assets/script/canvasjs.min.js"></script>
+</head>
+<style>
+      body {
+            font-size: 20px;
+            padding: 10px 30px;
+      }
+
+      .switch {
+            position: relative;
+            display: inline-block;
+            width: 60px;
+            height: 34px;
+      }
+
+      .switch input {
+            display: none;
+      }
+
+      .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            -webkit-transition: .4s;
+            transition: .4s;
+      }
+
+      .slider:before {
+            position: absolute;
+            content: "";
+            height: 26px;
+            width: 26px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            -webkit-transition: .4s;
+            transition: .4s;
+      }
+
+      input:checked+.slider {
+            background-color: #2196F3;
+      }
+
+      input:focus+.slider {
+            box-shadow: 0 0 1px #2196F3;
+      }
+
+      input:checked+.slider:before {
+            -webkit-transform: translateX(26px);
+            -ms-transform: translateX(26px);
+            transform: translateX(26px);
+      }
+
+      /* Rounded sliders */
+
+      .slider.round {
+            border-radius: 34px;
+      }
+
+      .slider.round:before {
+            border-radius: 50%;
+      }
+</style>
+
+<body>
+      <div>
+            <div> Websocket status
+                  <span id="status" style="font-weight: bold;"> disconneted </span>
+            </div>
+            <div> ESP8266 Button Status
+                  <input type="checkbox" id="btn" name="btn" /> </div>
+            <!-- <div> <span>Controll LED1 <input type="checkbox" id="led" name="led" disabled="true" /></span><span>Controll LED2 <input type="checkbox" id="led2" name="led2" disabled="true" /></span> </div>  -->
+            <center>
+                  <h2>Control</h2>
+            </center>
+            <center>
+                  <p>
+                        <p>&nbspLed1
+                              <label class="switch">
+                                    <input type="checkbox" id="led" name="led" disabled="true">
+                                    <span class="slider round"></span>
+                              </label>&nbsp&#9965; &nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbspLed2
+                              <label class="switch">
+                                    <input type="checkbox" id="led2" name="led2" disabled="true">
+                                    <span class="slider round"></span>
+                              </label>&nbsp&#9965;
+                        </p>
+            </center>
+      </div>
+      <div>
+            <div>
+                  <p>Temprature</p>
+                  <input type="text" size="6" id="temp">&#176;C
+            </div>
+            <div>
+                  <p>Humidity</p>
+                  <input type="text" size="6" id="humd">%
+            </div>
+      </div>
+
+
+      <h1> 2. DO THI</h1>
+      <br>
+      <!-- thiết lập kích thước cho graph thông qua id ChartContainer đã thiết lập ở trên -->
+      <div id="ChartContainer" style="height: 300px; width:80%;"></div>
+      <script type="text/javascript">
+            function httpGetAsync(theUrl, callback) {
+                  var xmlHttp = new XMLHttpRequest();
+                  xmlHttp.onreadystatechange = function () {
+                        if (xmlHttp.readyState == 4 && xmlHttp.status == 200)
+                              callback(JSON.parse(xmlHttp.responseText));
+                  }
+                  xmlHttp.open("GET", theUrl, true); // true for asynchronous
+                  xmlHttp.send(null);
+            }
+            window.onload = function () {
+                  var dataTemp = [];
+                  var dataHumd = [];
+                  var Chart = new CanvasJS.Chart("ChartContainer", {
+                        zoomEnabled: true, // Dùng thuộc tính có thể zoom vào graph
+                        title: {
+                              text: "Temprature & Humidity" // Viết tiêu đề cho graph
+                        },
+                        toolTip: { // Hiển thị cùng lúc 2 trường giá trị nhiệt độ, độ ẩm trên graph
+                              shared: true
+                        },
+                        axisX: {
+                              title: "chart updates every 2 secs" // Chú thích cho trục X
+                        },
+                        data: [{
+                              // Khai báo các thuộc tính của dataTemp và dataHumd
+                              type: "line", // Chọn kiểu dữ liệu đường
+                              xValueType: "dateTime", // Cài đặt kiểu giá trị tại trục X là thuộc tính thời gian
+                              showInLegend: true, // Hiển thị "temp" ở mục chú thích (legend items)
+                              name: "temp",
+                              dataPoints: dataTemp // Dữ liệu hiển thị sẽ lấy từ dataTemp
+                        },
+                        {
+                              type: "line",
+                              xValueType: "dateTime",
+                              showInLegend: true,
+                              name: "humd",
+                              dataPoints: dataHumd
+                        }
+                        ],
+                  });
+                  var yHumdVal = 0; // Biến lưu giá trị độ ẩm (theo trục Y)
+                  var yTempVal = 0; // Biến lưu giá trị nhiệt độ (theo trục Y)
+                  var updateInterval = 2000; // Thời gian cập nhật dữ liệu 2000ms = 2s
+                  var time = new Date(); // Lấy thời gian hiện tại
+                  var updateChart = function () {
+                        httpGetAsync('/get', function (data) {
+                              // Gán giá trị từ localhost:8000/get vào textbox để hiển thị
+                              document.getElementById("temp").value = data[0].temp;
+                              document.getElementById("humd").value = data[0].humd;
+                              console.log(data);
+                              // Cập nhật thời gian và lấy giá trị nhiệt độ, độ ẩm từ server
+                              time.setTime(time.getTime() + updateInterval);
+                              yTempVal = parseInt(data[0].temp);
+                              yHumdVal = parseInt(data[0].humd);
+                              dataTemp.push({ // cập nhât dữ liệu mới từ server
+                                    x: time.getTime(),
+                                    y: yTempVal
+                              });
+                              dataHumd.push({
+                                    x: time.getTime(),
+                                    y: yHumdVal
+                              });
+                              Chart.render(); // chuyển đổi dữ liệu của của graph thành mô hình đồ họa
+                        });
+                  };
+                  updateChart(); // Chạy lần đầu tiên
+                  setInterval(function () { // Cập nhật lại giá trị graph sau thời gian updateInterval
+                        updateChart()
+                  }, updateInterval);
+            }
+      </script>
+      <script type="text/javascript">
+            var button = document.getElementById('btn');
+            var led = document.getElementById('led');
+            var led2 = document.getElementById('led2');
+            var url = window.location.host;
+            var ws = new WebSocket('ws://' + url + '/ws');
+            console.log('connecting...')
+            ws.onopen = function () {
+                  document.getElementById('status').innerHTML = 'Connected';
+                  led.disabled = false;
+                  led2.disabled = false;
+                  console.log('connected')
+            };
+
+            ws.onmessage = function (evt) {
+                  console.log(evt.data)
+                  if (evt.data == 'BTN_PRESSED') {
+                        button.checked = true;
+                  } else if (evt.data == 'BTN_RELEASE') {
+                        button.checked = false;
+                  } else if (evt.data == 'LED1_OFF') {
+                        led.checked = false;
+                  } else if (evt.data == 'LED1_ON') {
+                        led.checked = true;
+                  } else if (evt.data == 'LED2_OFF') {
+                        led2.checked = false;
+                  } else if (evt.data == "LED2_ON") {
+                        led2.checked = true;
+                  }
+            };
+
+            ws.onclose = function () {
+                  led.disabled = true;
+                  led2.disabled = true;
+                  document.getElementById('status').innerHTML = 'Connected';
+            };
+
+            led.onchange = function () {
+                  var led_status = 'LED1_OFF';
+                  if (led.checked) {
+                        led_status = 'LED1_ON';
+                  }
+                  ws.send(led_status)
+            }
+            led2.onchange = function () {
+                  var led2_status = 'LED2_OFF';
+                  if (led2.checked) {
+                        led2_status = 'LED2_ON';
+                  }
+                  ws.send(led2_status);
+            } 
+      </script>
+</body>
+
+</html>
