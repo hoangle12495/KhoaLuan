@@ -1,20 +1,23 @@
 #include <Arduino.h>
 #include <SoftwareSerial.h>
 #include <ESP8266WiFi.h>
-#include <WebSocketsClient.h>
 #include <DHT.h>
+#include <SocketIoClient.h>
 #define DHTPIN 2
 #define DHTTYPE DHT11
   
 DHT dht (DHTPIN,DHTTYPE);
 WiFiClient client;
-WebSocketsClient webSocket;
+SocketIoClient ioClient;
+
+extern String RID;
+extern String Rfull;
 
 unsigned long old_time;
 const char* ssid = "Zte";
 const char* password = "viettel123";
 const int port = 8000;
-const char* server = "192.168.1.7";
+const char* server = "192.168.1.12";
 const int LED = 16;
 const int BTN = 0;
 const int sendingInternval = 2*1000;
@@ -26,20 +29,8 @@ void write_float(float value);
 float read_float();
 void write_sensor(uint8_t temp, uint8_t humi);
 
-void webSocketEvent(WStype_t type,uint8_t* payload,size_t length)
-{
-  switch (type){
-    case WStype_DISCONNECTED:
-      Serial.printf("[WSc] Disconnected!\n");
-      break;
-    case WStype_CONNECTED:
-    {
-      Serial.printf("[WSc] Connected to url: %s\n",payload);
-    }
-      break;
-    case WStype_TEXT:
-      //Serial.printf("[WSc] get text : %s\n",payload);
-      if(strcmp((char*)payload,"LED1_ON") == 0){
+void event(const char * payload, size_t length) {
+  if(strcmp((char*)payload,"LED1_ON") == 0){
         digitalWrite(LED,0);
         write_uint8_t(1);
       }else if(strcmp((char*)payload, "LED1_OFF") == 0){
@@ -52,11 +43,7 @@ void webSocketEvent(WStype_t type,uint8_t* payload,size_t length)
         //digitalWrite(LED,1);
         write_uint8_t(3);
       }
-      break;
-     case WStype_BIN:
-      Serial.printf("[WSc] get binary length : %u\n",length);
-      break;
-  }
+  
 }
 
 void setup() {
@@ -73,35 +60,19 @@ void setup() {
     delay(500);
     Serial.print(".");
   }
-
-  webSocket.begin(server,port);
-  webSocket.onEvent(webSocketEvent);
-
+  ioClient.on("BTN_CHANGE_SERVER", event);
+  ioClient.begin(server,port);
 }
 
 void loop() {
-  // put your main code here, to run repeatedly:
-  webSocket.loop();
-  static bool isPressed = false;
-  if(!isPressed && digitalRead(BTN) == 0){
-    isPressed = true;
-    webSocket.sendTXT("BTN_PRESSED");
-  }else if(isPressed && digitalRead(BTN)){
-    isPressed = false;
-    webSocket.sendTXT("BTN_RELEASE");
-  }
-  /*float temp = dht.readTemperature();
-  float humi = dht.readHumidity();
-  /*if(isnan(temp) || isnan(humi)){
-    Serial.println("Failed to read from DHTT sensor!");
-    return;
-  }*/
+  ioClient.loop();
+  
    uint8_t temp;
    uint8_t humi;
      if(read_sensor(&temp,&humi)/*m_serial.available()>= sizeof(humi)*/){
         //humi = read_uint8_t();
-       if((humi>=50) && (humi<=80)){
-        if((temp>=30 && (temp <=50))){
+       if((humi>=50) && (humi<=90)){
+        if((temp>=20 && (temp <=50))){
         if(client.connect(server,port)){
         String req_uri = "/update?temp=" + String(temp) + "&humd=" + String(humi);
         client.print("GET " + req_uri + " HTTP/1.1\n" + "Host: "+ server +"\n" + "Connection: close\n" + "Content-Length:0\n" +"\n\n");
